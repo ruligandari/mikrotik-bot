@@ -23,6 +23,7 @@ class SqliteRepository:
                 username TEXT PRIMARY KEY,
                 pppoe_name TEXT,
                 queue_name TEXT,
+                profile TEXT,
                 enabled INTEGER DEFAULT 1,
                 threshold_gb REAL DEFAULT NULL,
                 updated_at TEXT
@@ -114,6 +115,14 @@ class SqliteRepository:
             cur.execute('ALTER TABLE users ADD COLUMN threshold_gb REAL DEFAULT NULL')
             conn.commit()
 
+        # profile migration
+        try:
+            cur.execute('SELECT profile FROM users LIMIT 1')
+        except sqlite3.OperationalError:
+            logger.info("SqliteRepository: Adding profile to users")
+            cur.execute('ALTER TABLE users ADD COLUMN profile TEXT')
+            conn.commit()
+
     def update_usage_bulk(self, rows: list):
         """
         rows: List of (uname, qname, bi, bo, bt, ts, mk)
@@ -175,6 +184,14 @@ class SqliteRepository:
             return bool(enabled), (thresh if thresh is not None else Config.FUP_THRESHOLD_GB)
         return True, Config.FUP_THRESHOLD_GB
 
+    def get_user_profile(self, username: str) -> str:
+        conn = self.get_conn()
+        cur = conn.cursor()
+        cur.execute('SELECT profile FROM users WHERE username=?', (username,))
+        row = cur.fetchone()
+        conn.close()
+        return row[0] if row and row[0] else 'NORMAL'
+
     def set_user_config(self, username: str, enabled: Optional[bool] = None, threshold: Optional[float] = None):
         conn = self.get_conn()
         cur = conn.cursor()
@@ -185,17 +202,18 @@ class SqliteRepository:
         conn.commit()
         conn.close()
 
-    def register_user(self, username: str, pppoe_name: str, queue_name: str):
+    def register_user(self, username: str, pppoe_name: str, queue_name: str, profile: str = 'NORMAL'):
         conn = self.get_conn()
         cur = conn.cursor()
         cur.execute('''
-            INSERT INTO users(username, pppoe_name, queue_name, updated_at)
-            VALUES(?, ?, ?, ?)
+            INSERT INTO users(username, pppoe_name, queue_name, profile, updated_at)
+            VALUES(?, ?, ?, ?, ?)
             ON CONFLICT(username) DO UPDATE SET
                 pppoe_name=excluded.pppoe_name,
                 queue_name=excluded.queue_name,
+                profile=excluded.profile,
                 updated_at=excluded.updated_at
-        ''', (username, pppoe_name, queue_name, Config.now_local().isoformat()))
+        ''', (username, pppoe_name, queue_name, profile, Config.now_local().isoformat()))
         conn.commit()
         conn.close()
 
@@ -232,10 +250,10 @@ class SqliteRepository:
         conn.commit()
         conn.close()
 
-    def get_all_users_config(self) -> List[Tuple[str, bool, Optional[float]]]:
+    def get_all_users_config(self) -> List[Tuple[str, bool, Optional[float], str]]:
         conn = self.get_conn()
         cur = conn.cursor()
-        cur.execute('SELECT username, enabled, threshold_gb FROM users')
+        cur.execute('SELECT username, enabled, threshold_gb, profile FROM users')
         rows = cur.fetchall()
         conn.close()
         return rows
@@ -327,3 +345,16 @@ class SqliteRepository:
         rows = cur.fetchall()
         conn.close()
         return [r[0] for r in rows]
+
+    def get_unpaid_with_profile(self, month_key: str) -> List[Tuple[str, str]]:
+        conn = self.get_conn()
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT u.username, u.profile
+            FROM users u
+            LEFT JOIN billing_status b ON u.username = b.username AND b.month_key = ?
+            WHERE u.enabled = 1 AND (b.is_paid IS NULL OR b.is_paid = 0)
+        ''', (month_key,))
+        rows = cur.fetchall()
+        conn.close()
+        return rows

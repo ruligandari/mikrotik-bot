@@ -142,8 +142,20 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
     @router.get("/billing/unpaid", dependencies=[Depends(get_current_user)])
     async def get_unpaid_users():
         mk = Config.month_key()
-        unpaid = billing_service.get_unpaid_report()
-        return {"month": mk, "unpaid_count": len(unpaid), "users": unpaid}
+        unpaid_data = admin_service.repo.get_unpaid_with_profile(mk)
+        result = []
+        total_piutang = 0
+        for uname, profile in unpaid_data:
+            price = Config.PACKAGES.get(profile, Config.BILLING_MONTHLY_PRICE)
+            total_piutang += price
+            result.append({"username": uname, "profile": profile, "price": price})
+        
+        return {
+            "month": mk, 
+            "unpaid_count": len(unpaid_data), 
+            "total_piutang": total_piutang,
+            "users": result
+        }
 
     # --- Admin Actions ---
 

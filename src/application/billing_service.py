@@ -42,13 +42,14 @@ class BillingService:
             logger.info(f"BillingService: Before due day ({Config.BILLING_DUE_DAY}), skipping enforcement.")
             return notifs
 
-        unpaid_users = self.repo.get_unpaid_users(mk)
-        if not unpaid_users:
+        unpaid_data = self.repo.get_unpaid_with_profile(mk)
+        if not unpaid_data:
             return notifs
 
-        logger.info(f"BillingService: Found {len(unpaid_users)} unpaid users after due date. Isolating...")
+        logger.info(f"BillingService: Found {len(unpaid_data)} unpaid users after due date. Isolating...")
 
-        for username in unpaid_users:
+        for username, profile in unpaid_data:
+            price = Config.PACKAGES.get(profile, Config.BILLING_MONTHLY_PRICE)
             # Check if already disabled to avoid redundant actions
             is_disabled, _ = self.mk_gateway.get_pppoe_secret_status(username)
             if not is_disabled:
@@ -58,8 +59,8 @@ class BillingService:
                     self.mk_gateway.disconnect_pppoe_user(username)
                     
                     ts = Config.now_local().isoformat()
-                    self.repo.log_action(ActionLog(ts=ts, username=username, action='ISOLIR', detail=f"Disabled due to unpaid bill for {mk}"))
-                    notifs.append(f"⛔ *Isolir Otomatis:* `{username}` dinonaktifkan (Belum bayar - Jatuh tempo {Config.BILLING_DUE_DAY} {now.strftime('%B')})")
+                    self.repo.log_action(ActionLog(ts=ts, username=username, action='ISOLIR', detail=f"Disabled due to unpaid bill for {mk} ({profile} - Rp {price:,.0f})"))
+                    notifs.append(f"⛔ *Isolir Otomatis:* `{username}`\n  ├ Paket: `{profile}`\n  ├ Tagihan: `Rp {price:,.0f}`\n  └ Status: *DINONAKTIFKAN*")
                 else:
                     logger.error(f"Failed to isolate {username}: {err}")
 

@@ -30,7 +30,14 @@ class Config:
     
     # Billing
     BILLING_DUE_DAY = int(os.getenv('BILLING_DUE_DAY', '20'))
-    BILLING_MONTHLY_PRICE = float(os.getenv('BILLING_MONTHLY_PRICE', '150000')) # Default price
+    BILLING_MONTHLY_PRICE = float(os.getenv('BILLING_MONTHLY_PRICE', '150000')) # Global default
+    
+    # Package Definitions (Profile Name -> Price)
+    PACKAGES = {
+        'ilham': 50000.0,
+        'LIMIT': 30000.0,
+        'NORMAL': 100000.0 # Contoh default lain
+    }
     
     # API
     API_PORT = int(os.getenv('API_PORT', '8000'))

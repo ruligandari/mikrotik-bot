@@ -22,8 +22,8 @@ class AdminService:
         success, err = self.mk_gateway.add_ppp_secret(username, password, profile, new_ip)
         if success:
             ts = Config.now_local().isoformat()
-            # Register immediately so they appear in /users
-            self.repo.register_user(username, username, f"<pppoe-{username}>")
+            # Register immediately so they appear in /users with their profile
+            self.repo.register_user(username, username, f"<pppoe-{username}>", profile)
             self.repo.log_action(ActionLog(ts=ts, username=username, action='ADD_USER', detail=f"Profile: {profile}, IP: {new_ip}"))
             return True, new_ip, ""
         return False, None, err

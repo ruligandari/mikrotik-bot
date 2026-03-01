@@ -350,9 +350,17 @@ class TelegramBotInterface:
         username = context.args[0]
         mk = Config.month_key()
         status = self.repo.get_billing_status(username, mk)
+        profile = self.repo.get_user_profile(username)
+        expected_price = Config.PACKAGES.get(profile, Config.BILLING_MONTHLY_PRICE)
         
         if not status:
-            await update.message.reply_text(f"📝 User `{username}` belum memiliki data tagihan untuk `{mk}`.")
+            msg = (
+                f"💰 *Billing: {username} ({mk})*\n"
+                f"Paket: `{profile}`\n"
+                f"Status: `❌ BELUM BAYAR`\n"
+                f"Tagihan: `Rp {expected_price:,.0f}`"
+            )
+            await update.message.reply_text(msg, parse_mode='Markdown')
             return
             
         is_paid, amount, ts = status
@@ -363,6 +371,7 @@ class TelegramBotInterface:
             
         msg = (
             f"💰 *Billing: {username} ({mk})*\n"
+            f"Paket: `{profile}`\n"
             f"Status: `{'✅ LUNAS' if is_paid else '❌ BELUM BAYAR'}`\n"
             f"Total Bayar: `Rp {amount:,.0f}`\n"
             f"Update Terakhir: `{dt}`"
@@ -371,16 +380,20 @@ class TelegramBotInterface:
 
     async def cmd_unpaid(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         mk = Config.month_key()
-        unpaid = self.repo.get_unpaid_users(mk)
+        unpaid_data = self.repo.get_unpaid_with_profile(mk)
         
-        if not unpaid:
+        if not unpaid_data:
             await update.message.reply_text(f"✅ Semua user sudah lunas untuk bulan `{mk}`.")
             return
             
-        lines = [f"💸 *Penunggak Bulan {mk} ({len(unpaid)})*", "_Jatuh tempo setiap tanggal 20_"]
-        for uname in unpaid:
-            lines.append(f"- `{uname}`")
-            
+        lines = [f"💸 *Penunggak Bulan {mk} ({len(unpaid_data)})*", "_Jatuh tempo setiap tanggal 20_"]
+        total_piutang = 0
+        for uname, profile in unpaid_data:
+            price = Config.PACKAGES.get(profile, Config.BILLING_MONTHLY_PRICE)
+            total_piutang += price
+            lines.append(f"- `{uname}` ({profile}): *Rp {price:,.0f}*")
+        
+        lines.append(f"\nTotal Piutang: *Rp {total_piutang:,.0f}*")
         await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
