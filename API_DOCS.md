@@ -40,7 +40,7 @@ Mendapatkan statistik total traffic jaringan dan Top 5 pengguna bulan ini.
     ```
 
 ### 3. List All Users
-Mendapatkan daftar semua user yang terdaftar beserta konfigurasi limitnya.
+Mendapatkan daftar semua user yang terdaftar beserta konfigurasi limit dan paketnya.
 *   **Endpoint:** `GET /api/v1/users`
 *   **Response:**
     ```json
@@ -48,13 +48,15 @@ Mendapatkan daftar semua user yang terdaftar beserta konfigurasi limitnya.
       {
         "username": "user1",
         "enabled": true,
-        "threshold_gb": 100.0
+        "threshold_gb": 100.0,
+        "profile": "Ilham",
+        "package_name": "Paket 5Mbps"
       }
     ]
     ```
 
 ### 4. Get User Detail Status
-Mendapatkan detail pemakaian real-time dan state FUP user tertentu.
+Mendapatkan detail pemakaian real-time, paket, dan state FUP user tertentu.
 *   **Endpoint:** `GET /api/v1/status/{username}`
 *   **Response:**
     ```json
@@ -63,6 +65,9 @@ Mendapatkan detail pemakaian real-time dan state FUP user tertentu.
       "usage_gb": 85.5,
       "threshold_gb": 100.0,
       "enabled": true,
+      "profile": "Ilham",
+      "package_name": "Paket 5Mbps",
+      "price": 50000.0,
       "state": "normal",
       "last_action": "2026-03-01T10:00:00"
     }
@@ -73,13 +78,25 @@ Melihat siapa saja yang saat ini terkoneksi (PPPoE Active).
 *   **Endpoint:** `GET /api/v1/sessions`
 
 ### 6. Get PPP Profiles
-Melihat daftar profile PPPoE yang tersedia di MikroTik (berguna untuk dropdown di UI).
+Melihat daftar profile PPPoE yang tersedia di MikroTik (berguna untuk dropdown Add User di UI).
 *   **Endpoint:** `GET /api/v1/profiles`
 *   **Response:**
     ```json
     [
-      {"name": "NORMAL", "local-address": "192.168.10.1", "remote-address": null},
-      {"name": "LIMIT", "local-address": "192.168.10.1", "remote-address": null}
+      {
+        "profile": "Ilham",
+        "package_name": "Paket 5Mbps",
+        "price": 50000.0,
+        "local_address": "192.168.10.1",
+        "remote_address": null
+      },
+      {
+        "profile": "LIMIT",
+        "package_name": "Paket Lite",
+        "price": 30000.0,
+        "local_address": "192.168.10.1",
+        "remote_address": null
+      }
     ]
     ```
 
@@ -178,14 +195,18 @@ Cek apakah user tertentu sudah bayar di bulan berjalan.
     ```
 
 ### 16. List Unpaid Users
-Daftar penunggak yang belum lunas di bulan berjalan.
+Daftar penunggak yang belum lunas di bulan berjalan beserta total tagihan yang menggantung.
 *   **Endpoint:** `GET /api/v1/billing/unpaid`
 *   **Response:**
     ```json
     {
       "month": "2026-03",
       "unpaid_count": 2,
-      "users": ["user2", "user3"]
+      "total_piutang": 80000.0,
+      "users": [
+        {"username": "user2", "profile": "LIMIT", "price": 30000.0},
+        {"username": "user3", "profile": "Ilham", "price": 50000.0}
+      ]
     }
     ```
 

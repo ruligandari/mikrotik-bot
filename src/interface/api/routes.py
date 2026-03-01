@@ -108,7 +108,18 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
     @router.get("/profiles", dependencies=[Depends(get_current_user)])
     async def get_profiles():
         profiles = admin_service.get_ppp_profiles()
-        return [{"name": p.get("name"), "local-address": p.get("local-address"), "remote-address": p.get("remote-address")} for p in profiles]
+        result = []
+        for p in profiles:
+            pname = p.get("name")
+            pkg_info = Config.get_package_info(pname)
+            result.append({
+                "profile": pname,
+                "package_name": pkg_info['name'],
+                "price": pkg_info['price'],
+                "local_address": p.get("local-address"),
+                "remote_address": p.get("remote-address")
+            })
+        return result
 
     @router.get("/throttled", dependencies=[Depends(get_current_user)])
     async def get_throttled_users():
