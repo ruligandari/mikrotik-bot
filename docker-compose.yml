@@ -1,6 +1,6 @@
 services:
   mikrotik-bot:
-    build: ./app
+    build: .
     container_name: mikrotik-bot
     restart: always
     env_file:
@@ -8,8 +8,10 @@ services:
     volumes:
       - ./data:/app/data
       - ./.env:/app/.env:ro
+    environment:
+      - PYTHONPATH=/app
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(3); s.connect(('${MIKROTIK_HOST}', int('${MIKROTIK_PORT}'))); s.close(); print('ok')"]
+      test: ["CMD", "python", "-c", "import socket; import os; s=socket.socket(); s.settimeout(3); s.connect((os.getenv('MIKROTIK_HOST'), int(os.getenv('MIKROTIK_PORT', 8728)))); s.close()"]
       interval: 30s
       timeout: 5s
       retries: 3
