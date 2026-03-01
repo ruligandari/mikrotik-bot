@@ -22,6 +22,8 @@ class AdminService:
         success, err = self.mk_gateway.add_ppp_secret(username, password, profile, new_ip)
         if success:
             ts = Config.now_local().isoformat()
+            # Register immediately so they appear in /users
+            self.repo.register_user(username, username, f"<pppoe-{username}>")
             self.repo.log_action(ActionLog(ts=ts, username=username, action='ADD_USER', detail=f"Profile: {profile}, IP: {new_ip}"))
             return True, new_ip, ""
         return False, None, err
@@ -30,7 +32,14 @@ class AdminService:
         success, err = self.mk_gateway.remove_ppp_secret(username)
         if success:
             ts = Config.now_local().isoformat()
-            self.repo.log_action(ActionLog(ts=ts, username=username, action='DEL_USER', detail="Secret removed from MikroTik"))
+            # Also remove from DB to keep /users list clean
+            conn = self.repo.get_conn()
+            cur = conn.cursor()
+            cur.execute('DELETE FROM users WHERE username=?', (username,))
+            conn.commit()
+            conn.close()
+            
+            self.repo.log_action(ActionLog(ts=ts, username=username, action='DEL_USER', detail="Secret removed from MikroTik and Database"))
             return True, ""
         return False, err
 

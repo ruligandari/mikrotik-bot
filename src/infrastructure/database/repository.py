@@ -159,6 +159,20 @@ class SqliteRepository:
         conn.commit()
         conn.close()
 
+    def register_user(self, username: str, pppoe_name: str, queue_name: str):
+        conn = self.get_conn()
+        cur = conn.cursor()
+        cur.execute('''
+            INSERT INTO users(username, pppoe_name, queue_name, updated_at)
+            VALUES(?, ?, ?, ?)
+            ON CONFLICT(username) DO UPDATE SET
+                pppoe_name=excluded.pppoe_name,
+                queue_name=excluded.queue_name,
+                updated_at=excluded.updated_at
+        ''', (username, pppoe_name, queue_name, Config.now_local().isoformat()))
+        conn.commit()
+        conn.close()
+
     def get_user_state(self, username: str) -> Optional[UserState]:
         conn = self.get_conn()
         cur = conn.cursor()
