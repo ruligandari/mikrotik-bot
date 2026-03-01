@@ -3,8 +3,9 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
-# Load specifically from the same location as before
-load_dotenv('/app/.env')
+# Load environment variables from the project root
+env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(env_path)
 
 class Config:
     # MikroTik
@@ -35,13 +36,23 @@ class Config:
     # Package Definitions (Profile Name -> Price)
     PACKAGES = {
         'ilham': 50000.0,
-        'LIMIT': 30000.0,
-        'NORMAL': 100000.0 # Contoh default lain
+        'limit': 30000.0,
+        'normal': 100000.0
     }
+
+    @classmethod
+    def get_package_price(cls, profile: str) -> float:
+        if not profile:
+            return cls.BILLING_MONTHLY_PRICE
+        return cls.PACKAGES.get(profile.lower(), cls.BILLING_MONTHLY_PRICE)
     
-    # API
     API_PORT = int(os.getenv('API_PORT', '8000'))
-    API_CORS_ORIGINS = os.getenv('API_CORS_ORIGINS', '*').split(',')
+    # Default to common development origins if * is used with credentials
+    cors_raw = os.getenv('API_CORS_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173')
+    if cors_raw == '*':
+        API_CORS_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173']
+    else:
+        API_CORS_ORIGINS = [orig.strip() for orig in cors_raw.split(',')]
     ENVIRONMENT = os.getenv('ENVIRONMENT', 'development').lower()
     
     # JWT Security

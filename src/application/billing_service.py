@@ -49,7 +49,7 @@ class BillingService:
         logger.info(f"BillingService: Found {len(unpaid_data)} unpaid users after due date. Isolating...")
 
         for username, profile in unpaid_data:
-            price = Config.PACKAGES.get(profile, Config.BILLING_MONTHLY_PRICE)
+            price = Config.get_package_price(profile)
             # Check if already disabled to avoid redundant actions
             is_disabled, _ = self.mk_gateway.get_pppoe_secret_status(username)
             if not is_disabled:

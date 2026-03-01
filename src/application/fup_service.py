@@ -107,7 +107,7 @@ class FupService:
         
         # Get all users who have state in DB
         all_configs = self.repo.get_all_users_config()
-        for uname, _, _ in all_configs:
+        for uname, _, _, _ in all_configs:
             success, err = self.mk_gateway.set_pppoe_profile(uname, Config.BASE_RATE)
             if success:
                 self.mk_gateway.disconnect_pppoe_user(uname)

@@ -117,11 +117,10 @@ class TelegramBotInterface:
             return
 
         lines = ["👥 *Daftar User & Config*"]
-        for uname, enabled, thresh in users:
-            status = "✅ ON" if enabled else "❌ OFF"
+        for uname, enabled, thresh, profile in users:
+            status = "✅" if enabled else "❌"
             limit_str = f"{thresh} GB" if thresh is not None else f"{Config.FUP_THRESHOLD_GB} GB"
-            custom_label = " (Custom)" if thresh is not None else ""
-            lines.append(f"- `{uname}`: {status} | Limit: *{limit_str}*{custom_label}")
+            lines.append(f"- `{uname}` ({profile or 'NORMAL'}): {status} | Limit: *{limit_str}*")
         
         await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
 
@@ -351,7 +350,7 @@ class TelegramBotInterface:
         mk = Config.month_key()
         status = self.repo.get_billing_status(username, mk)
         profile = self.repo.get_user_profile(username)
-        expected_price = Config.PACKAGES.get(profile, Config.BILLING_MONTHLY_PRICE)
+        expected_price = Config.get_package_price(profile)
         
         if not status:
             msg = (
@@ -389,9 +388,9 @@ class TelegramBotInterface:
         lines = [f"💸 *Penunggak Bulan {mk} ({len(unpaid_data)})*", "_Jatuh tempo setiap tanggal 20_"]
         total_piutang = 0
         for uname, profile in unpaid_data:
-            price = Config.PACKAGES.get(profile, Config.BILLING_MONTHLY_PRICE)
+            price = Config.get_package_price(profile)
             total_piutang += price
-            lines.append(f"- `{uname}` ({profile}): *Rp {price:,.0f}*")
+            lines.append(f"- `{uname}` ({profile or 'NORMAL'}): *Rp {price:,.0f}*")
         
         lines.append(f"\nTotal Piutang: *Rp {total_piutang:,.0f}*")
         await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
