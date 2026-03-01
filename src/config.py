@@ -28,6 +28,10 @@ class Config:
     # Database
     DB_PATH = '/app/data/bot.db'
     
+    # Billing
+    BILLING_DUE_DAY = int(os.getenv('BILLING_DUE_DAY', '20'))
+    BILLING_MONTHLY_PRICE = float(os.getenv('BILLING_MONTHLY_PRICE', '150000')) # Default price
+    
     # API
     API_PORT = int(os.getenv('API_PORT', '8000'))
     API_CORS_ORIGINS = os.getenv('API_CORS_ORIGINS', '*').split(',')

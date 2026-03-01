@@ -54,6 +54,32 @@ class SqliteRepository:
             )
         ''')
 
+        # Subscriptions / Billing Status
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS billing_status (
+                username TEXT,
+                month_key TEXT,
+                is_paid INTEGER DEFAULT 0,
+                amount_paid REAL DEFAULT 0,
+                updated_at TEXT,
+                PRIMARY KEY (username, month_key)
+            )
+        ''')
+
+        # Payment History
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS payment_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts TEXT,
+                username TEXT,
+                month_key TEXT,
+                amount REAL,
+                method TEXT DEFAULT 'manual'
+            )
+        ''')
+
+        conn.commit()
+        
         # Action Logging
         cur.execute('''
             CREATE TABLE IF NOT EXISTS action_log (
@@ -255,3 +281,49 @@ class SqliteRepository:
         rows = cur.fetchall()
         conn.close()
         return rows
+
+    # --- Billing Methods ---
+
+    def get_billing_status(self, username: str, month_key: str) -> Optional[Tuple[bool, float, str]]:
+        conn = self.get_conn()
+        cur = conn.cursor()
+        cur.execute('SELECT is_paid, amount_paid, updated_at FROM billing_status WHERE username=? AND month_key=?', (username, month_key))
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            return bool(row[0]), row[1], row[2]
+        return None
+
+    def mark_as_paid(self, username: str, month_key: str, amount: float):
+        ts = Config.now_local().isoformat()
+        conn = self.get_conn()
+        cur = conn.cursor()
+        # 1. Update status
+        cur.execute('''
+            INSERT INTO billing_status(username, month_key, is_paid, amount_paid, updated_at)
+            VALUES(?, ?, 1, ?, ?)
+            ON CONFLICT(username, month_key) DO UPDATE SET
+                is_paid=1, amount_paid=amount_paid + excluded.amount_paid, updated_at=excluded.updated_at
+        ''', (username, month_key, amount, ts))
+        
+        # 2. Log history
+        cur.execute('INSERT INTO payment_history(ts, username, month_key, amount, method) VALUES(?, ?, ?, ?, ?)',
+                    (ts, username, month_key, amount, 'manual'))
+        
+        conn.commit()
+        conn.close()
+
+    def get_unpaid_users(self, month_key: str) -> List[str]:
+        """Returns list of usernames who have NOT paid for the given month but are monitored."""
+        conn = self.get_conn()
+        cur = conn.cursor()
+        # Check users who exist in 'users' table but not in 'billing_status' (as paid)
+        cur.execute('''
+            SELECT u.username 
+            FROM users u
+            LEFT JOIN billing_status b ON u.username = b.username AND b.month_key = ?
+            WHERE u.enabled = 1 AND (b.is_paid IS NULL OR b.is_paid = 0)
+        ''', (month_key,))
+        rows = cur.fetchall()
+        conn.close()
+        return [r[0] for r in rows]

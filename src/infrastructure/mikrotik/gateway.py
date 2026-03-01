@@ -183,6 +183,56 @@ class MikrotikGateway:
             if pool:
                 pool.disconnect()
 
+    def get_pppoe_secret_status(self, username):
+        """Returns (is_disabled, id)"""
+        pool = None
+        try:
+            pool = self._mk_pool()
+            api = pool.get_api()
+            secrets = api.get_resource('/ppp/secret').get(name=username)
+            if not secrets:
+                return None, None
+            return secrets[0].get('disabled') == 'true', secrets[0].get('id')
+        except:
+            return None, None
+        finally:
+            if pool:
+                pool.disconnect()
+
+    def enable_pppoe_secret(self, username):
+        pool = None
+        try:
+            pool = self._mk_pool()
+            api = pool.get_api()
+            resource = api.get_resource('/ppp/secret')
+            secrets = resource.get(name=username)
+            if not secrets:
+                return False, "Not found"
+            resource.set(id=secrets[0]['id'], disabled='false')
+            return True, ""
+        except Exception as e:
+            return False, str(e)
+        finally:
+            if pool:
+                pool.disconnect()
+
+    def disable_pppoe_secret(self, username):
+        pool = None
+        try:
+            pool = self._mk_pool()
+            api = pool.get_api()
+            resource = api.get_resource('/ppp/secret')
+            secrets = resource.get(name=username)
+            if not secrets:
+                return False, "Not found"
+            resource.set(id=secrets[0]['id'], disabled='true')
+            return True, ""
+        except Exception as e:
+            return False, str(e)
+        finally:
+            if pool:
+                pool.disconnect()
+
     def fetch_ppp_profiles(self):
         pool = None
         try:

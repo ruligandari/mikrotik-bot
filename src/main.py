@@ -8,6 +8,7 @@ from src.infrastructure.database.repository import SqliteRepository
 from src.infrastructure.mikrotik.gateway import MikrotikGateway
 from src.application.fup_service import FupService
 from src.application.admin_service import AdminService
+from src.application.billing_service import BillingService
 from src.interface.telegram.bot import TelegramBotInterface
 from src.interface.worker.background import BackgroundWorker
 from src.interface.api.app import create_app
@@ -30,19 +31,20 @@ async def run_bot_and_api():
     
     fup_service = FupService(repo, mk_gateway)
     admin_service = AdminService(repo, mk_gateway)
+    billing_service = BillingService(repo, mk_gateway)
     
     # 1. Setup Telegram Bot
     app = Application.builder().token(Config.BOT_TOKEN).build()
-    bot_interface = TelegramBotInterface(fup_service, admin_service, repo, mk_gateway)
+    bot_interface = TelegramBotInterface(fup_service, admin_service, billing_service, repo, mk_gateway)
     bot_interface.setup_handlers(app)
     
     # 2. Setup FastAPI
-    web_app = create_app(fup_service, admin_service)
+    web_app = create_app(fup_service, admin_service, billing_service)
     config = uvicorn.Config(web_app, host="0.0.0.0", port=Config.API_PORT, log_level="info")
     server = uvicorn.Server(config)
     
     # 3. Setup Worker
-    worker = BackgroundWorker(fup_service, app)
+    worker = BackgroundWorker(fup_service, billing_service, app)
 
     # Startup Notification
     if Config.ADMIN_CHAT_ID:

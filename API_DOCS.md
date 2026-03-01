@@ -144,6 +144,53 @@ Memaksa user masuk ke status limit atau normal secara manual.
 
 ---
 
+### 13. Force Throttle / Normal
+*   **Endpoint:** `POST /api/v1/user/force-throttle/{username}`
+*   **Endpoint:** `POST /api/v1/user/force-normal/{username}`
+
+---
+
+## 💰 Endpoints Billing (Payments)
+
+### 14. Record Payment
+Mencatat pembayaran manual dan otomatis mengaktifkan internet (jika sebelumnya terisolir).
+*   **Endpoint:** `POST /api/v1/billing/record-payment`
+*   **Body (JSON):**
+    ```json
+    {
+      "username": "user1",
+      "amount": 150000.0
+    }
+    ```
+
+### 15. Get Billing Status
+Cek apakah user tertentu sudah bayar di bulan berjalan.
+*   **Endpoint:** `GET /api/v1/billing/status/{username}`
+*   **Response:**
+    ```json
+    {
+      "username": "user1",
+      "month": "2026-03",
+      "is_paid": true,
+      "amount_paid": 150000.0,
+      "updated_at": "2026-03-05T10:00:00"
+    }
+    ```
+
+### 16. List Unpaid Users
+Daftar penunggak yang belum lunas di bulan berjalan.
+*   **Endpoint:** `GET /api/v1/billing/unpaid`
+*   **Response:**
+    ```json
+    {
+      "month": "2026-03",
+      "unpaid_count": 2,
+      "users": ["user2", "user3"]
+    }
+    ```
+
+---
+
 ## 💡 Tips untuk AI Dashboard Builder
 - Gunakan **Axios** atau **Fetch API** dengan *Interceptor* untuk menambahkan header `Authorization: Bearer <token>` secara otomatis.
 - Token JWT bapak berlaku selama 24 jam (`1440` menit) sesuai konfigurasi `.env`.

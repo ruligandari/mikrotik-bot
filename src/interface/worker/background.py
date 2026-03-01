@@ -4,12 +4,14 @@ import os
 from telegram.ext import Application
 from src.config import Config
 from src.application.fup_service import FupService
+from src.application.billing_service import BillingService
 
 logger = logging.getLogger('mikrotik-bot.interface.worker')
 
 class BackgroundWorker:
-    def __init__(self, fup_service: FupService, app: Application):
+    def __init__(self, fup_service: FupService, billing_service: BillingService, app: Application):
         self.fup_service = fup_service
+        self.billing_service = billing_service
         self.app = app
         self.admin_id = Config.ADMIN_CHAT_ID
 
@@ -49,6 +51,11 @@ class BackgroundWorker:
                 logger.debug("Worker: Starting FUP cycle...")
                 notifs = self.fup_service.run_fup_cycle()
                 await self._notify(notifs)
+
+                # Billing Enforcement (Isolation)
+                logger.debug("Worker: Starting billing enforcement cycle...")
+                billing_notifs = self.billing_service.run_billing_enforcement()
+                await self._notify(billing_notifs)
 
             except Exception as e:
                 logger.exception(f"Worker: Background loop error: {e}")

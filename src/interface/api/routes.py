@@ -7,6 +7,7 @@ from typing import List, Optional
 from src.config import Config
 from src.application.fup_service import FupService
 from src.application.admin_service import AdminService
+from src.application.billing_service import BillingService
 from src.interface.api.security import create_access_token, get_current_user
 
 class Token(BaseModel):
@@ -18,6 +19,10 @@ class UserAddRequest(BaseModel):
     password: str
     profile: str
 
+class PaymentRequest(BaseModel):
+    username: str
+    amount: float
+
 class LimitRequest(BaseModel):
     username: str
     limit_gb: float
@@ -26,7 +31,7 @@ class ToggleRequest(BaseModel):
     username: str
     enabled: bool
 
-def create_router(fup_service: FupService, admin_service: AdminService):
+def create_router(fup_service: FupService, admin_service: AdminService, billing_service: BillingService):
     router = APIRouter(prefix="/api/v1")
 
     # --- Public Auth ---
@@ -108,6 +113,37 @@ def create_router(fup_service: FupService, admin_service: AdminService):
     async def get_user_logs(username: str, limit: int = 10):
         logs = admin_service.repo.get_action_logs(username, limit=limit)
         return [{"ts": ts, "action": a, "detail": d} for ts, a, d in logs]
+
+    # --- Billing Endpoints ---
+    
+    @router.post("/billing/record-payment", dependencies=[Depends(get_current_user)])
+    async def record_payment(req: PaymentRequest):
+        success, msg = billing_service.process_payment(req.username, req.amount)
+        if not success:
+            raise HTTPException(status_code=500, detail=msg)
+        return {"message": msg}
+
+    @router.get("/billing/status/{username}", dependencies=[Depends(get_current_user)])
+    async def get_billing_status(username: str):
+        mk = Config.month_key()
+        status = admin_service.repo.get_billing_status(username, mk)
+        if not status:
+            return {"username": username, "month": mk, "is_paid": False, "amount_paid": 0}
+        
+        is_paid, amount, ts = status
+        return {
+            "username": username,
+            "month": mk,
+            "is_paid": is_paid,
+            "amount_paid": amount,
+            "updated_at": ts
+        }
+
+    @router.get("/billing/unpaid", dependencies=[Depends(get_current_user)])
+    async def get_unpaid_users():
+        mk = Config.month_key()
+        unpaid = billing_service.get_unpaid_report()
+        return {"month": mk, "unpaid_count": len(unpaid), "users": unpaid}
 
     # --- Admin Actions ---
 

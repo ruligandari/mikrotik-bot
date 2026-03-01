@@ -6,15 +6,17 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 from src.config import Config
 from src.application.fup_service import FupService
 from src.application.admin_service import AdminService
+from src.application.billing_service import BillingService
 from src.infrastructure.database.repository import SqliteRepository
 from src.infrastructure.mikrotik.gateway import MikrotikGateway
 
 logger = logging.getLogger('mikrotik-bot.interface.telegram')
 
 class TelegramBotInterface:
-    def __init__(self, fup_service: FupService, admin_service: AdminService, repo: SqliteRepository, mk_gateway: MikrotikGateway):
+    def __init__(self, fup_service: FupService, admin_service: AdminService, billing_service: BillingService, repo: SqliteRepository, mk_gateway: MikrotikGateway):
         self.fup_service = fup_service
         self.admin_service = admin_service
+        self.billing_service = billing_service
         self.repo = repo
         self.mk_gateway = mk_gateway
 
@@ -37,25 +39,31 @@ class TelegramBotInterface:
         app.add_handler(CommandHandler('force_normal', self.cmd_force_normal))
         app.add_handler(CommandHandler('runcheck', self.cmd_runcheck))
         app.add_handler(CommandHandler('health', self.cmd_health))
+        
+        # Billing Handlers
+        app.add_handler(CommandHandler('pay', self.cmd_pay))
+        app.add_handler(CommandHandler('billing', self.cmd_billing))
+        app.add_handler(CommandHandler('unpaid', self.cmd_unpaid))
+        
         app.add_handler(CallbackQueryHandler(self.handle_callback))
 
     async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         help_text = (
-            "🛰 *MikroTik Pro Manager v6.0*\n"
+            "🛰 *MikroTik Pro Manager v8.0*\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
+            "💰 *Billing & Payment*\n"
+            "• /pay <u|amount> - Catat bayar & aktifkan\n"
+            "• /billing <user> - Cek status bayar user\n"
+            "• /unpaid - Daftar penunggak bulan ini\n\n"
+            "📊 *Monitoring (FUP)*\n"
             "• /status <user> - Cek pemakaian & kelola\n"
-            "• /summary - Ringkasan pemakaian hari ini\n"
-            "• /users - Daftar semua user & konfigurasi\n"
-            "• /sessions - Daftar user yang sedang online\n"
-            "• /throttled - Daftar user yang sedang di-limit\n"
-            "• /logs <user> - Riwayat aksi FUP untuk user\n"
-            "• /add_user <u|p|prof> - Tambah user baru (Auto IP)\n"
-            "• /del_user <user> - Hapus secret dari MikroTik\n"
-            "• /kick <user> - Putuskan sesi user aktif\n"
-            "• /set_limit <user> <gb> - Set limit khusus user\n"
-            "• /set_enabled <user> <0/1> - Aktifkan/matikan FUP user\n"
-            "• /runcheck - Jalankan siklus pengecekan manual\n"
-            "• /health - Status bot & koneksi MikroTik\n"
+            "• /summary - Ringkasan traffic\n"
+            "• /users - Daftar semua user\n\n"
+            "⚙️ *Admin Tool*\n"
+            "• /add_user <u|p|prof> - Tambah PPPoE\n"
+            "• /del_user <user> - Hapus PPPoE\n"
+            "• /kick <user> - Putus sesi aktif\n"
+            "• /health - Status bot & router\n"
             "━━━━━━━━━━━━━━━━━━━━"
         )
         await update.message.reply_text(help_text, parse_mode='Markdown')
@@ -313,6 +321,67 @@ class TelegramBotInterface:
         if not api_ok:
             status_text += f"\n⚠️ *Error:* `{api_err}`"
         await update.message.reply_text(status_text, parse_mode='Markdown')
+
+    # --- Billing Commands ---
+
+    async def cmd_pay(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if len(context.args) < 2:
+            await update.message.reply_text("Format: `/pay <username> <amount>`", parse_mode='Markdown')
+            return
+        
+        username = context.args[0]
+        try:
+            amount = float(context.args[1].replace(',', ''))
+        except:
+            await update.message.reply_text("❌ Jumlah pembayaran harus berupa angka.")
+            return
+
+        success, msg = self.billing_service.process_payment(username, amount)
+        if success:
+            await update.message.reply_text(f"✅ *Sukses!*\n{msg}", parse_mode='Markdown')
+        else:
+            await update.message.reply_text(f"❌ Gagal: {msg}")
+
+    async def cmd_billing(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not context.args:
+            await update.message.reply_text("Format: `/billing <username>`", parse_mode='Markdown')
+            return
+        
+        username = context.args[0]
+        mk = Config.month_key()
+        status = self.repo.get_billing_status(username, mk)
+        
+        if not status:
+            await update.message.reply_text(f"📝 User `{username}` belum memiliki data tagihan untuk `{mk}`.")
+            return
+            
+        is_paid, amount, ts = status
+        try:
+            dt = datetime.fromisoformat(ts).strftime('%d/%m/%Y %H:%M')
+        except:
+            dt = ts
+            
+        msg = (
+            f"💰 *Billing: {username} ({mk})*\n"
+            f"Status: `{'✅ LUNAS' if is_paid else '❌ BELUM BAYAR'}`\n"
+            f"Total Bayar: `Rp {amount:,.0f}`\n"
+            f"Update Terakhir: `{dt}`"
+        )
+        await update.message.reply_text(msg, parse_mode='Markdown')
+
+    async def cmd_unpaid(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        mk = Config.month_key()
+        unpaid = self.repo.get_unpaid_users(mk)
+        
+        if not unpaid:
+            await update.message.reply_text(f"✅ Semua user sudah lunas untuk bulan `{mk}`.")
+            return
+            
+        lines = [f"💸 *Penunggak Bulan {mk} ({len(unpaid)})*", "_Jatuh tempo setiap tanggal 20_"]
+        for uname in unpaid:
+            lines.append(f"- `{uname}`")
+            
+        await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
