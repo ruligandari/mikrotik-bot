@@ -73,8 +73,9 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
             {
                 "username": u,
                 "enabled": bool(e),
-                "threshold_gb": t if t else Config.FUP_THRESHOLD_GB
-            } for u, e, t in users
+                "threshold_gb": t if t else Config.FUP_THRESHOLD_GB,
+                "profile": p
+            } for u, e, t, p in users
         ]
 
     @router.get("/status/{username}", dependencies=[Depends(get_current_user)])
@@ -146,9 +147,9 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
         result = []
         total_piutang = 0
         for uname, profile in unpaid_data:
-            price = Config.PACKAGES.get(profile, Config.BILLING_MONTHLY_PRICE)
+            price = Config.get_package_price(profile)
             total_piutang += price
-            result.append({"username": uname, "profile": profile, "price": price})
+            result.append({"username": uname, "profile": profile or "NORMAL", "price": price})
         
         return {
             "month": mk, 
