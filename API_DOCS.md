@@ -50,7 +50,8 @@ Mendapatkan daftar semua user yang terdaftar beserta konfigurasi limit dan paket
         "enabled": true,
         "threshold_gb": 100.0,
         "profile": "Ilham",
-        "package_name": "Paket 5Mbps"
+        "package_name": "Paket 5Mbps",
+        "whatsapp": "08123456789"
       }
     ]
     ```
@@ -68,6 +69,8 @@ Mendapatkan detail pemakaian real-time, paket, dan state FUP user tertentu.
       "profile": "Ilham",
       "package_name": "Paket 5Mbps",
       "price": 50000.0,
+      "whatsapp": "08123456789",
+      "remote_address": "192.168.10.50",
       "state": "normal",
       "last_action": "2026-03-01T10:00:00"
     }
@@ -84,9 +87,7 @@ Melihat daftar profile PPPoE yang tersedia di MikroTik (berguna untuk dropdown A
     ```json
     [
       {
-        "profile": "Ilham",
-        "package_name": "Paket 5Mbps",
-        "price": 50000.0,
+       "price": 50000.0,
         "local_address": "192.168.10.1",
         "remote_address": null
       },
@@ -98,7 +99,9 @@ Melihat daftar profile PPPoE yang tersedia di MikroTik (berguna untuk dropdown A
         "remote_address": null
       }
     ]
-    ```
+    ``` "profile": "Ilham",
+        "package_name": "Paket 5Mbps",
+        
 
 ### 7. Get Throttled Users
 Daftar user yang saat ini sedang dalam status limit kecepatan.
@@ -120,15 +123,27 @@ Membuat user baru di MikroTik (Auto IP Static Allocation).
     {
       "username": "user_baru",
       "password": "password123",
-      "profile": "NORMAL"
+      "profile": "NORMAL",
+      "whatsapp": "08123456789"
     }
     ```
 
-### 9. Delete User
+### 10. Update User Data
+Update informasi user (seperti nomor WhatsApp).
+*   **Endpoint:** `POST /api/v1/user/update`
+*   **Body (JSON):**
+    ```json
+    {
+      "username": "user1",
+      "whatsapp": "08987654321"
+    }
+    ```
+
+### 11. Delete User
 Menghapus user dari MikroTik dan Database.
 *   **Endpoint:** `DELETE /api/v1/user/{username}`
 
-### 10. Set Quota Limit
+### 12. Set Quota Limit
 Mengatur limit GB khusus untuk user tertentu.
 *   **Endpoint:** `POST /api/v1/user/set-limit`
 *   **Body (JSON):**
