@@ -72,7 +72,18 @@ Mendapatkan detail pemakaian real-time dan state FUP user tertentu.
 Melihat siapa saja yang saat ini terkoneksi (PPPoE Active).
 *   **Endpoint:** `GET /api/v1/sessions`
 
-### 6. Get Throttled Users
+### 6. Get PPP Profiles
+Melihat daftar profile PPPoE yang tersedia di MikroTik (berguna untuk dropdown di UI).
+*   **Endpoint:** `GET /api/v1/profiles`
+*   **Response:**
+    ```json
+    [
+      {"name": "NORMAL", "local-address": "192.168.10.1", "remote-address": null},
+      {"name": "LIMIT", "local-address": "192.168.10.1", "remote-address": null}
+    ]
+    ```
+
+### 7. Get Throttled Users
 Daftar user yang saat ini sedang dalam status limit kecepatan.
 *   **Endpoint:** `GET /api/v1/throttled`
 

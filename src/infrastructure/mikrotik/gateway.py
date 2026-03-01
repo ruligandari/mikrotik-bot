@@ -183,6 +183,18 @@ class MikrotikGateway:
             if pool:
                 pool.disconnect()
 
+    def fetch_ppp_profiles(self):
+        pool = None
+        try:
+            pool = self._mk_pool()
+            api = pool.get_api()
+            return api.get_resource('/ppp/profile').get()
+        except:
+            return []
+        finally:
+            if pool:
+                pool.disconnect()
+
     def get_next_pppoe_ip(self):
         """Calculates next IP based on existing secrets."""
         pool = None

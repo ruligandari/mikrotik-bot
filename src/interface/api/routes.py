@@ -93,6 +93,11 @@ def create_router(fup_service: FupService, admin_service: AdminService):
         actives = admin_service.fetch_active_sessions()
         return actives
 
+    @router.get("/profiles", dependencies=[Depends(get_current_user)])
+    async def get_profiles():
+        profiles = admin_service.get_ppp_profiles()
+        return [{"name": p.get("name"), "local-address": p.get("local-address"), "remote-address": p.get("remote-address")} for p in profiles]
+
     @router.get("/throttled", dependencies=[Depends(get_current_user)])
     async def get_throttled_users():
         mk = Config.month_key()

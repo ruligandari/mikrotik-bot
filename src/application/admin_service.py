@@ -14,6 +14,9 @@ class AdminService:
     def fetch_active_sessions(self):
         return self.mk_gateway.fetch_active_sessions()
 
+    def get_ppp_profiles(self):
+        return self.mk_gateway.fetch_ppp_profiles()
+
     def add_user(self, username, password, profile):
         new_ip = self.mk_gateway.get_next_pppoe_ip()
         success, err = self.mk_gateway.add_ppp_secret(username, password, profile, new_ip)
