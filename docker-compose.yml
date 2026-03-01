@@ -8,6 +8,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./.env:/app/.env:ro
+    ports:
+      - "8000:8000"
     environment:
       - PYTHONPATH=/app
     healthcheck:

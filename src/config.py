@@ -27,6 +27,17 @@ class Config:
     
     # Database
     DB_PATH = '/app/data/bot.db'
+    
+    # API
+    API_PORT = int(os.getenv('API_PORT', '8000'))
+    API_CORS_ORIGINS = os.getenv('API_CORS_ORIGINS', '*').split(',')
+    ENVIRONMENT = os.getenv('ENVIRONMENT', 'development').lower()
+    
+    # JWT Security
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'default_secret_dont_use_in_prod')
+    JWT_ALGORITHM = "HS256"
+    JWT_EXPIRE_MINUTES = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '1440'))
+    ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
 
     @staticmethod
     def now_local() -> datetime:
