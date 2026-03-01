@@ -59,9 +59,9 @@ class Config:
     
     API_PORT = int(os.getenv('API_PORT', '8000'))
     # Default to common development origins if * is used with credentials
-    cors_raw = os.getenv('API_CORS_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173')
+    cors_raw = os.getenv('API_CORS_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://localhost:8001,http://127.0.0.1:8001')
     if cors_raw == '*':
-        API_CORS_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173']
+        API_CORS_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173', 'http://localhost:8001', 'http://127.0.0.1:8001']
     else:
         API_CORS_ORIGINS = [orig.strip() for orig in cors_raw.split(',')]
     ENVIRONMENT = os.getenv('ENVIRONMENT', 'development').lower()
