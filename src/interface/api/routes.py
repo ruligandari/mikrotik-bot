@@ -74,7 +74,8 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
                 "username": u,
                 "enabled": bool(e),
                 "threshold_gb": t if t else Config.FUP_THRESHOLD_GB,
-                "profile": p
+                "profile": p,
+                "package_name": Config.get_package_info(p)['name']
             } for u, e, t, p in users
         ]
 
@@ -83,13 +84,18 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
         mk = Config.month_key()
         bt = admin_service.repo.get_accumulated_bytes(mk, username)
         enabled, threshold = admin_service.repo.get_user_config(username)
+        profile = admin_service.repo.get_user_profile(username)
         state_obj = admin_service.repo.get_user_state(username)
+        pkg_info = Config.get_package_info(profile)
         
         return {
             "username": username,
             "usage_gb": Config.to_gb(bt),
             "threshold_gb": threshold,
             "enabled": enabled,
+            "profile": profile,
+            "package_name": pkg_info['name'],
+            "price": pkg_info['price'],
             "state": state_obj.state if state_obj else "normal",
             "last_action": state_obj.last_action_at if state_obj else None
         }

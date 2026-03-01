@@ -33,18 +33,29 @@ class Config:
     BILLING_DUE_DAY = int(os.getenv('BILLING_DUE_DAY', '20'))
     BILLING_MONTHLY_PRICE = float(os.getenv('BILLING_MONTHLY_PRICE', '150000')) # Global default
     
-    # Package Definitions (Profile Name -> Price)
+    # Package Definitions (Profile Name -> {display_name, price})
+    # Gunakan lowercase untuk key agar pencocokan tidak sensitif huruf besar/kecil
     PACKAGES = {
-        'ilham': 50000.0,
-        'limit': 30000.0,
-        'normal': 100000.0
+        'ilham': {'name': 'Paket 5Mbps', 'price': 50000.0},
+        'limit': {'name': 'Paket Lite', 'price': 30000.0},
+        'normal': {'name': 'Paket Standard', 'price': 100000.0}
     }
 
     @classmethod
-    def get_package_price(cls, profile: str) -> float:
+    def get_package_info(cls, profile: str) -> dict:
         if not profile:
-            return cls.BILLING_MONTHLY_PRICE
-        return cls.PACKAGES.get(profile.lower(), cls.BILLING_MONTHLY_PRICE)
+            return {'name': 'Default', 'price': cls.BILLING_MONTHLY_PRICE}
+        
+        info = cls.PACKAGES.get(profile.lower())
+        if info:
+            return info
+        
+        # Fallback jika profil tidak terdaftar khusus
+        return {'name': f'Profil {profile}', 'price': cls.BILLING_MONTHLY_PRICE}
+
+    @classmethod
+    def get_package_price(cls, profile: str) -> float:
+        return cls.get_package_info(profile)['price']
     
     API_PORT = int(os.getenv('API_PORT', '8000'))
     # Default to common development origins if * is used with credentials

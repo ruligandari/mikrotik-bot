@@ -80,22 +80,29 @@ class TelegramBotInterface:
         mk = Config.month_key()
         
         bt = self.repo.get_accumulated_bytes(mk, username)
-        bt_gb = Config.to_gb(bt)
+        usage_gb = Config.to_gb(bt)
         
         user_state_obj = self.repo.get_user_state(username)
         state = user_state_obj.state if user_state_obj else 'normal'
+        last_action = user_state_obj.last_action_at if user_state_obj else "N/A"
         
-        enabled, threshold = self.repo.get_user_config(username)
+        enabled, threshold_gb = self.repo.get_user_config(username)
         target_p = Config.THROTTLE_RATE if state == 'throttled' else Config.BASE_RATE
         
+        profile = self.repo.get_user_profile(username)
+        pkg_info = Config.get_package_info(profile)
+        
         msg = (
-            f"📊 *Status {username}*\n"
-            f"- State: `{state.upper()}`\n"
-            f"- Target Profile: `{target_p}`\n"
-            f"- Limit: `{threshold} GB`\n"
-            f"- Monitoring: `{'✅ ON' if enabled else '❌ OFF'}`\n"
-            f"- Bulan: `{mk}`\n"
-            f"- Total Usage: `*{bt_gb} GB*`"
+            f"👤 *User Status: {username}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 *Paket:* `{pkg_info['name']}`\n"
+            f"💰 *Harga:* `Rp {pkg_info['price']:,.0f}`\n"
+            f"📊 *Usage:* `{usage_gb} GB` / `{threshold_gb} GB`\n"
+            f"⚙️ *State:* `{state.upper()}`\n"
+            f"📅 *Bulan:* `{mk}`\n"
+            f"🔄 *Last Action:* `{last_action}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🚀 *Speed Saat Ini:* `{target_p}`"
         )
 
         keyboard = [
@@ -120,7 +127,8 @@ class TelegramBotInterface:
         for uname, enabled, thresh, profile in users:
             status = "✅" if enabled else "❌"
             limit_str = f"{thresh} GB" if thresh is not None else f"{Config.FUP_THRESHOLD_GB} GB"
-            lines.append(f"- `{uname}` ({profile or 'NORMAL'}): {status} | Limit: *{limit_str}*")
+            pkg_name = Config.get_package_info(profile)['name']
+            lines.append(f"- `{uname}` ({pkg_name}): {status} | Limit: *{limit_str}*")
         
         await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
 
@@ -350,14 +358,14 @@ class TelegramBotInterface:
         mk = Config.month_key()
         status = self.repo.get_billing_status(username, mk)
         profile = self.repo.get_user_profile(username)
-        expected_price = Config.get_package_price(profile)
+        pkg_info = Config.get_package_info(profile)
         
         if not status:
             msg = (
                 f"💰 *Billing: {username} ({mk})*\n"
-                f"Paket: `{profile}`\n"
+                f"Paket: `{pkg_info['name']}`\n"
                 f"Status: `❌ BELUM BAYAR`\n"
-                f"Tagihan: `Rp {expected_price:,.0f}`"
+                f"Tagihan: `Rp {pkg_info['price']:,.0f}`"
             )
             await update.message.reply_text(msg, parse_mode='Markdown')
             return
@@ -370,7 +378,7 @@ class TelegramBotInterface:
             
         msg = (
             f"💰 *Billing: {username} ({mk})*\n"
-            f"Paket: `{profile}`\n"
+            f"Paket: `{pkg_info['name']}`\n"
             f"Status: `{'✅ LUNAS' if is_paid else '❌ BELUM BAYAR'}`\n"
             f"Total Bayar: `Rp {amount:,.0f}`\n"
             f"Update Terakhir: `{dt}`"
@@ -388,9 +396,9 @@ class TelegramBotInterface:
         lines = [f"💸 *Penunggak Bulan {mk} ({len(unpaid_data)})*", "_Jatuh tempo setiap tanggal 20_"]
         total_piutang = 0
         for uname, profile in unpaid_data:
-            price = Config.get_package_price(profile)
-            total_piutang += price
-            lines.append(f"- `{uname}` ({profile or 'NORMAL'}): *Rp {price:,.0f}*")
+            pkg_info = Config.get_package_info(profile)
+            total_piutang += pkg_info['price']
+            lines.append(f"- `{uname}` ({pkg_info['name']}): *Rp {pkg_info['price']:,.0f}*")
         
         lines.append(f"\nTotal Piutang: *Rp {total_piutang:,.0f}*")
         await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
