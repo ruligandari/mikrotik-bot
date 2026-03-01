@@ -22,7 +22,8 @@ Mengubah username atau password login dashboard. (Membutuhkan Login Admin).
     ```json
     {
       "new_username": "admin_baru",
-      "new_password": "password_super_aman"
+      "new_password": "password_super_aman",
+      "confirm_password": "password_super_aman"
     }
     ```
 

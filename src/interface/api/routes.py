@@ -39,6 +39,7 @@ class ToggleRequest(BaseModel):
 class AdminUpdateRequest(BaseModel):
     new_username: Optional[str] = None
     new_password: Optional[str] = None
+    confirm_password: Optional[str] = None
 
 def create_router(fup_service: FupService, admin_service: AdminService, billing_service: BillingService):
     router = APIRouter(prefix="/api/v1")
@@ -73,6 +74,9 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
 
     @router.post("/auth/update-admin", dependencies=[Depends(get_current_user)])
     async def update_admin(req: AdminUpdateRequest):
+        if req.new_password and req.new_password != req.confirm_password:
+            raise HTTPException(status_code=400, detail="Passwords do not match")
+
         if req.new_username:
             admin_service.repo.set_setting("admin_username", req.new_username)
         if req.new_password:
