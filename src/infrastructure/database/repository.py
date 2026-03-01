@@ -24,6 +24,7 @@ class SqliteRepository:
                 pppoe_name TEXT,
                 queue_name TEXT,
                 profile TEXT,
+                whatsapp TEXT,
                 enabled INTEGER DEFAULT 1,
                 threshold_gb REAL DEFAULT NULL,
                 updated_at TEXT
@@ -123,6 +124,14 @@ class SqliteRepository:
             cur.execute('ALTER TABLE users ADD COLUMN profile TEXT')
             conn.commit()
 
+        # whatsapp migration
+        try:
+            cur.execute('SELECT whatsapp FROM users LIMIT 1')
+        except sqlite3.OperationalError:
+            logger.info("SqliteRepository: Adding whatsapp to users")
+            cur.execute('ALTER TABLE users ADD COLUMN whatsapp TEXT')
+            conn.commit()
+
     def update_usage_bulk(self, rows: list):
         """
         rows: List of (uname, qname, bi, bo, bt, ts, mk)
@@ -192,6 +201,14 @@ class SqliteRepository:
         conn.close()
         return row[0] if row and row[0] else 'NORMAL'
 
+    def get_user_whatsapp(self, username: str) -> Optional[str]:
+        conn = self.get_conn()
+        cur = conn.cursor()
+        cur.execute('SELECT whatsapp FROM users WHERE username=?', (username,))
+        row = cur.fetchone()
+        conn.close()
+        return row[0] if row else None
+
     def set_user_config(self, username: str, enabled: Optional[bool] = None, threshold: Optional[float] = None):
         conn = self.get_conn()
         cur = conn.cursor()
@@ -202,18 +219,19 @@ class SqliteRepository:
         conn.commit()
         conn.close()
 
-    def register_user(self, username: str, pppoe_name: str, queue_name: str, profile: str = 'NORMAL'):
+    def register_user(self, username: str, pppoe_name: str, queue_name: str, profile: str = 'NORMAL', whatsapp: str = None):
         conn = self.get_conn()
         cur = conn.cursor()
         cur.execute('''
-            INSERT INTO users(username, pppoe_name, queue_name, profile, updated_at)
-            VALUES(?, ?, ?, ?, ?)
+            INSERT INTO users(username, pppoe_name, queue_name, profile, whatsapp, updated_at)
+            VALUES(?, ?, ?, ?, ?, ?)
             ON CONFLICT(username) DO UPDATE SET
                 pppoe_name=excluded.pppoe_name,
                 queue_name=excluded.queue_name,
                 profile=excluded.profile,
+                whatsapp=COALESCE(excluded.whatsapp, users.whatsapp),
                 updated_at=excluded.updated_at
-        ''', (username, pppoe_name, queue_name, profile, Config.now_local().isoformat()))
+        ''', (username, pppoe_name, queue_name, profile, whatsapp, Config.now_local().isoformat()))
         conn.commit()
         conn.close()
 
@@ -250,10 +268,10 @@ class SqliteRepository:
         conn.commit()
         conn.close()
 
-    def get_all_users_config(self) -> List[Tuple[str, bool, Optional[float], str]]:
+    def get_all_users_config(self) -> List[Tuple[str, bool, Optional[float], str, str]]:
         conn = self.get_conn()
         cur = conn.cursor()
-        cur.execute('SELECT username, enabled, threshold_gb, profile FROM users')
+        cur.execute('SELECT username, enabled, threshold_gb, profile, whatsapp FROM users')
         rows = cur.fetchall()
         conn.close()
         return rows

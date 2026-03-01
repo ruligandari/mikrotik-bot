@@ -17,14 +17,14 @@ class AdminService:
     def get_ppp_profiles(self):
         return self.mk_gateway.fetch_ppp_profiles()
 
-    def add_user(self, username, password, profile):
+    def add_user(self, username, password, profile, whatsapp=None):
         new_ip = self.mk_gateway.get_next_pppoe_ip()
         success, err = self.mk_gateway.add_ppp_secret(username, password, profile, new_ip)
         if success:
             ts = Config.now_local().isoformat()
-            # Register immediately so they appear in /users with their profile
-            self.repo.register_user(username, username, f"<pppoe-{username}>", profile)
-            self.repo.log_action(ActionLog(ts=ts, username=username, action='ADD_USER', detail=f"Profile: {profile}, IP: {new_ip}"))
+            # Register immediately so they appear in /users with their profile/wa
+            self.repo.register_user(username, username, f"<pppoe-{username}>", profile, whatsapp)
+            self.repo.log_action(ActionLog(ts=ts, username=username, action='ADD_USER', detail=f"Profile: {profile}, IP: {new_ip}, WhatsApp: {whatsapp}"))
             return True, new_ip, ""
         return False, None, err
 

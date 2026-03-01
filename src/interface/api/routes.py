@@ -18,6 +18,11 @@ class UserAddRequest(BaseModel):
     username: str
     password: str
     profile: str
+    whatsapp: Optional[str] = None
+
+class UserUpdateRequest(BaseModel):
+    username: str
+    whatsapp: Optional[str] = None
 
 class PaymentRequest(BaseModel):
     username: str
@@ -75,8 +80,9 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
                 "enabled": bool(e),
                 "threshold_gb": t if t else Config.FUP_THRESHOLD_GB,
                 "profile": p,
-                "package_name": Config.get_package_info(p)['name']
-            } for u, e, t, p in users
+                "package_name": Config.get_package_info(p)['name'],
+                "whatsapp": wa
+            } for u, e, t, p, wa in users
         ]
 
     @router.get("/status/{username}", dependencies=[Depends(get_current_user)])
@@ -87,6 +93,11 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
         profile = admin_service.repo.get_user_profile(username)
         state_obj = admin_service.repo.get_user_state(username)
         pkg_info = Config.get_package_info(profile)
+        wa = admin_service.repo.get_user_whatsapp(username)
+        
+        # MikroTik Dynamic Data
+        mk_secret = admin_service.mk_gateway.get_ppp_secret_details(username)
+        remote_address = mk_secret.get('remote-address') if mk_secret else "N/A"
         
         return {
             "username": username,
@@ -96,6 +107,8 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
             "profile": profile,
             "package_name": pkg_info['name'],
             "price": pkg_info['price'],
+            "whatsapp": wa,
+            "remote_address": remote_address,
             "state": state_obj.state if state_obj else "normal",
             "last_action": state_obj.last_action_at if state_obj else None
         }
@@ -179,10 +192,18 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
 
     @router.post("/user/add", dependencies=[Depends(get_current_user)])
     async def add_user(req: UserAddRequest):
-        success, ip, err = admin_service.add_user(req.username, req.password, req.profile)
+        success, ip, err = admin_service.add_user(req.username, req.password, req.profile, req.whatsapp)
         if not success:
             raise HTTPException(status_code=500, detail=err)
+            
         return {"message": f"User {req.username} created", "ip": ip}
+
+    @router.post("/user/update", dependencies=[Depends(get_current_user)])
+    async def update_user(req: UserUpdateRequest):
+        # Current data for COALESCE-like behavior or manual get
+        profile = admin_service.repo.get_user_profile(req.username)
+        admin_service.repo.register_user(req.username, req.username, f"<pppoe-{req.username}>", profile, req.whatsapp)
+        return {"message": f"User {req.username} updated"}
 
     @router.delete("/user/{username}", dependencies=[Depends(get_current_user)])
     async def delete_user(username: str):

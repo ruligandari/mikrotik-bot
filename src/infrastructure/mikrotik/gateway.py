@@ -146,6 +146,19 @@ class MikrotikGateway:
             if pool:
                 pool.disconnect()
 
+    def get_ppp_secret_details(self, username):
+        pool = None
+        try:
+            pool = self._mk_pool()
+            api = pool.get_api()
+            secrets = api.get_resource('/ppp/secret').get(name=username)
+            return secrets[0] if secrets else None
+        except:
+            return None
+        finally:
+            if pool:
+                pool.disconnect()
+
     def add_ppp_secret(self, username, password, profile, remote_addr):
         pool = None
         try:

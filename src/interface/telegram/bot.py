@@ -44,23 +44,25 @@ class TelegramBotInterface:
         app.add_handler(CommandHandler('pay', self.cmd_pay))
         app.add_handler(CommandHandler('billing', self.cmd_billing))
         app.add_handler(CommandHandler('unpaid', self.cmd_unpaid))
+        app.add_handler(CommandHandler('wa', self.cmd_set_wa))
         
         app.add_handler(CallbackQueryHandler(self.handle_callback))
 
     async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         help_text = (
-            "🛰 *MikroTik Pro Manager v8.0*\n"
+            "🛰 *MikroTik Pro Manager v8.5*\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             "💰 *Billing & Payment*\n"
             "• /pay <u|amount> - Catat bayar & aktifkan\n"
             "• /billing <user> - Cek status bayar user\n"
             "• /unpaid - Daftar penunggak bulan ini\n\n"
             "📊 *Monitoring (FUP)*\n"
-            "• /status <user> - Cek pemakaian & kelola\n"
+            "• /status <user> - Detail & IP MikroTik\n"
             "• /summary - Ringkasan traffic\n"
-            "• /users - Daftar semua user\n\n"
+            "• /users - Daftar semua user & WA\n\n"
             "⚙️ *Admin Tool*\n"
             "• /add_user <u|p|prof> - Tambah PPPoE\n"
+            "• /wa <u|number> - Set Nomor WhatsApp\n"
             "• /del_user <user> - Hapus PPPoE\n"
             "• /kick <user> - Putus sesi aktif\n"
             "• /health - Status bot & router\n"
@@ -91,6 +93,11 @@ class TelegramBotInterface:
         
         profile = self.repo.get_user_profile(username)
         pkg_info = Config.get_package_info(profile)
+        wa = self.repo.get_user_whatsapp(username) or "Belum di-set"
+        
+        # MikroTik Dynamic Data
+        mk_secret = self.mk_gateway.get_ppp_secret_details(username)
+        remote_address = mk_secret.get('remote-address') if mk_secret else "N/A"
         
         msg = (
             f"👤 *User Status: {username}*\n"
@@ -98,6 +105,8 @@ class TelegramBotInterface:
             f"📦 *Paket:* `{pkg_info['name']}`\n"
             f"💰 *Harga:* `Rp {pkg_info['price']:,.0f}`\n"
             f"📊 *Usage:* `{usage_gb} GB` / `{threshold_gb} GB`\n"
+            f"📱 *WhatsApp:* `{wa}`\n"
+            f"📍 *Static IP:* `{remote_address}`\n"
             f"⚙️ *State:* `{state.upper()}`\n"
             f"📅 *Bulan:* `{mk}`\n"
             f"🔄 *Last Action:* `{last_action}`\n"
@@ -124,11 +133,12 @@ class TelegramBotInterface:
             return
 
         lines = ["👥 *Daftar User & Config*"]
-        for uname, enabled, thresh, profile in users:
+        for uname, enabled, thresh, profile, wa in users:
             status = "✅" if enabled else "❌"
             limit_str = f"{thresh} GB" if thresh is not None else f"{Config.FUP_THRESHOLD_GB} GB"
             pkg_name = Config.get_package_info(profile)['name']
-            lines.append(f"- `{uname}` ({pkg_name}): {status} | Limit: *{limit_str}*")
+            wa_str = f" | 📱 `{wa}`" if wa else ""
+            lines.append(f"- `{uname}` ({pkg_name}): {status} | Limit: *{limit_str}*{wa_str}")
         
         await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
 
@@ -402,6 +412,20 @@ class TelegramBotInterface:
         
         lines.append(f"\nTotal Piutang: *Rp {total_piutang:,.0f}*")
         await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
+
+    async def cmd_set_wa(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if len(context.args) < 2:
+            await update.message.reply_text("Format: `/wa <username> <nomor>`", parse_mode='Markdown')
+            return
+        
+        username = context.args[0]
+        wa_number = context.args[1]
+        
+        # Current data to preserve other fields
+        profile = self.repo.get_user_profile(username)
+        self.repo.register_user(username, username, f"<pppoe-{username}>", profile, wa_number)
+        
+        await update.message.reply_text(f"✅ Nomor WhatsApp untuk `{username}` berhasil diset ke `{wa_number}`.")
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
