@@ -1,194 +1,109 @@
-# MikroTik PPPoE FUP Telegram Bot — Blueprint (Docker)
+# 🛰️ MikroTik FUP Manager — Blueprint (Clean Architecture v7.0)
 
 ## 1) Tujuan
-Membuat sistem monitoring PPPoE yang berjalan di home-server (Docker):
-- Paket dasar user: **5M/5M**
-- Jika pemakaian bulan berjalan **>= 100 GB**: turunkan ke **2M/2M**
-- Perubahan limit dipastikan aktif dengan **disconnect 1x**
-- Awal bulan berikutnya: kembali ke **5M/5M** dan hitung ulang dari nol
+Membuat sistem monitoring PPPoE yang berjalan di Docker untuk manajemen kuota otomatis:
+- **Normal Profile**: Managed via profile (e.g. `NORMAL`) - Speed penuh.
+- **Throttled Profile**: Otomatis turun ke profile limit (e.g. `LIMIT`) jika pemakaian **>= Threshold**.
+- **Enforcement**: Perubahan profile dipastikan aktif dengan **disconnect 1x**.
+- **Monthly Reset**: Awal bulan berikutnya otomatis kembali ke speed normal dan reset akumulasi.
 
 ---
 
-## 2) Prinsip desain
-1. **Metering bulanan jangan bergantung penuh pada counter live RouterOS**
-   - Counter bisa berubah/reset karena reboot/reconnect.
-   - Bot menyimpan akumulasi bulanan di DB lokal.
-2. **Idempotent action**
-   - Jika user sudah throttled, jangan eksekusi throttle berulang-ulang.
-3. **Aman & bisa diaudit**
-   - Semua aksi (throttle, unthrottle, disconnect, error) masuk log + notifikasi Telegram.
+## 2) Prinsip Desain (Clean Architecture)
+Sistem ini menggunakan prinsip **Clean Architecture (Domain-Driven Design Lite)** untuk memisahkan logika bisnis dari detail teknis:
+1. **Domain Layer**: Entitas inti (User, Usage, ActionLog) yang independen.
+2. **Application Layer**: Use Cases (FupService, AdminService) untuk alur kerja bisnis.
+3. **Infrastructure Layer**: Adapter teknis (MikrotikGateway, SqliteRepository).
+4. **Interface Layer**: Entry points (TelegramBotInterface, BackgroundWorker).
 
 ---
 
-## 3) Arsitektur komponen
-- **app (Python)**
-  - Scheduler internal (interval check + monthly reset)
-  - Logic FUP
-  - Telegram command handler
-  - MikroTik connector (SSH/API)
-- **db (SQLite file di volume Docker)**
-  - Simpan state user, usage bulanan, histori aksi
-- **config (.env)**
-  - Token telegram, threshold, profil speed, kredensial MikroTik
-
-Opsional nanti:
-- Redis untuk queue job
-- Postgres kalau scale besar
+## 3) Arsitektur Komponen
+- **`src/`**: Folder utama kode sumber.
+  - **`domain/`**: Model data & kontrak bisnis.
+  - **`application/`**: Logika FUP & Administrasi.
+  - **`infrastructure/`**: Komunikasi MikroTik API & Database SQLite.
+  - **`interface/`**: Handler Telegram & Worker Background.
+- **`data/`**: Volume Docker untuk database persistent (`bot.db`).
+- **`.env`**: Konfigurasi rahasia (Token, Password, Host).
 
 ---
 
-## 4) Folder struktur (target)
-```
+## 4) Folder Struktur (Current v7.0)
+```text
 /root/mikrotik-bot/
-  ├─ docker-compose.yml
-  ├─ .env
-  ├─ app/
-  │   ├─ main.py
-  │   ├─ mikrotik_client.py
-  │   ├─ fup_engine.py
-  │   ├─ scheduler.py
-  │   ├─ telegram_bot.py
-  │   └─ db.py
+  ├─ src/
+  │   ├─ domain/          # Models (User, Usage, State)
+  │   ├─ application/     # Services (FUP, Admin)
+  │   ├─ infrastructure/  # Gateways (MikroTik, DB Repository)
+  │   ├─ interface/       # Presentation (Telegram Bot, Worker)
+  │   ├─ config.py        # Centralized Config
+  │   └─ main.py          # Entry Point
   ├─ data/
-  │   ├─ bot.db
-  │   └─ logs/
-  ├─ scripts/
-  │   ├─ backup_db.sh
-  │   └─ restore_db.sh
-  └─ BLUEPRINT.md
+  │   └─ bot.db           # SQLite persistent storage
+  ├─ .env                 # Environment variables
+  ├─ Dockerfile           # Python 3.11 image definition
+  ├─ docker-compose.yml   # Multi-container orchestration
+  ├─ .gitignore           # Security prevent leaks
+  └─ README.md            # Documentation & Usage Guide
 ```
 
 ---
 
-## 5) Data model (SQLite)
-
-### table: `users`
-- `username` (PK) — contoh: `ilham`
-- `pppoe_name` — contoh: `ilham`
-- `queue_name` — contoh: `<pppoe-ilham>`
-- `base_rate` — default `5M/5M`
-- `throttle_rate` — default `2M/2M`
-- `enabled` — 1/0
-
-### table: `monthly_usage`
-- `id` (PK)
-- `month_key` — format `YYYY-MM` (contoh `2026-03`)
-- `username`
-- `bytes_in`
-- `bytes_out`
-- `bytes_total`
-- `last_sample_at`
-
-### table: `user_state`
-- `username` (PK)
-- `month_key`
-- `state` — `normal` | `throttled`
-- `last_action_at`
-- `last_reason`
-
-### table: `action_log`
-- `id` (PK)
-- `ts`
-- `username`
-- `action` — `THROTTLE`, `UNTHROTTLE`, `DISCONNECT`, `ERROR`, `RESET_MONTH`
-- `detail`
+## 5) Data Model (SQLite Repository)
+- **`users`**: Nama user, pppoe name, status monitoring, dan custom threshold.
+- **`monthly_usage`**: Akumulasi bytes per bulan (`YYYY-MM`).
+- **`user_state`**: State saat ini (`normal`/`throttled`) dan alasan aksi terakhir.
+- **`action_log`**: Histori audit semua perintah dan perubahan state.
 
 ---
 
-## 6) Sumber data usage
-Prioritas:
-1. Counter dari queue/user yang konsisten antar reconnect
-2. Snapshot periodik ke DB (mis. tiap 5 menit)
-3. Hitung delta aman (hindari minus jika counter turun/reset)
+## 6) Logic Utama
+### A. Background Worker (Interval Check)
+Berjalan setiap X detik:
+1. **Fetch Usage**: Ambil statistik bytes dari MikroTik API (Queue Simple).
+2. **Delta Calculation**: Update DB dengan menghitung selisih counter (aman terhadap reset/reboot).
+3. **Threshold Check**: Bandingkan total GB bulan ini dengan limit user.
+4. **Action**: Jika over limit, laksanakan throttle profile + disconnect + notif Telegram.
 
-Aturan delta:
-- Jika counter sekarang >= counter sebelumnya: `delta = now - prev`
-- Jika counter sekarang < sebelumnya: anggap rollover/reset -> `delta = now` + catat event reset
-
----
-
-## 7) Alur logic utama
-
-### A. Interval check (mis. tiap 5 menit)
-Untuk tiap user aktif:
-1. Ambil counter terbaru
-2. Update akumulasi `monthly_usage`
-3. Jika `bytes_total >= threshold` DAN state `normal`:
-   - Apply rate `2M/2M`
-   - Disconnect PPP aktif user (1x)
-   - Ubah state -> `throttled`
-   - Kirim notif Telegram
-
-### B. Monthly rollover (tgl 1, 00:00 Asia/Jakarta)
-1. Buat `month_key` baru
-2. Set semua state user -> `normal`
-3. Apply base rate `5M/5M`
-4. (Opsional) disconnect terjadwal/bertahap agar profil langsung refresh
-5. Kirim ringkasan Telegram
+### B. Scheduler Tasks
+1. **Monthly Rollover**: Setiap tanggal 1, reset semua user ke profile normal.
+2. **Daily Report**: Setiap jam 08:00 WIB, kirim ringkasan traffic total ke admin.
+3. **Daily Backup**: Setiap jam 00:00 WIB, kirim file `bot.db` ke Telegram admin.
 
 ---
 
-## 8) Telegram commands (MVP)
-- `/health` -> status service, koneksi MikroTik, DB
-- `/status <user>` -> state, usage bulan ini, rate aktif
-- `/top` -> pengguna terbesar bulan ini
-- `/throttled` -> daftar user throttled
-- `/force_throttle <user>` -> throttle manual
-- `/force_normal <user>` -> balik normal manual
-- `/run_check` -> trigger pengecekan sekarang
+## 7) Telegram Interface & UI
+- **Interactive Messages**: Menggunakan Inline Buttons (Refresh, Kick, Toggle Limit, Logs).
+- **Commands**:
+  - `/status <user>`: Dashboard pemakaian interaktif.
+  - `/summary`: Ringkasan traffic jaringan & top users.
+  - `/add_user`: Tambah user baru dengan alokasi IP otomatis.
+  - `/set_limit`: Kustomisasi limit GB per user.
+  - `/health`: Cek kesehatan koneksi TCP & API MikroTik.
 
 ---
 
-## 9) Konfigurasi `.env` (rencana)
-- `TZ=Asia/Jakarta`
-- `BOT_TOKEN=...`
-- `TELEGRAM_CHAT_ID=...`
-- `MIKROTIK_HOST=192.168.100.1`
-- `MIKROTIK_PORT=2222`
-- `MIKROTIK_USER=...`
-- `MIKROTIK_PASS=...`
-- `CHECK_INTERVAL_SECONDS=300`
-- `FUP_THRESHOLD_GB=100`
-- `BASE_RATE=5M/5M`
-- `THROTTLE_RATE=2M/2M`
+## 8) Konfigurasi `.env` (Required)
+- `BOT_TOKEN`: Token dari BotFather.
+- `TELEGRAM_CHAT_ID`: ID Admin penerima laporan.
+- `MIKROTIK_HOST`: IP/Host MikroTik.
+- `MIKROTIK_PORT`: Default `8728` (API).
+- `MIKROTIK_USER` & `MIKROTIK_PASS`: Kredensial API RouterOS.
+- `FUP_THRESHOLD_GB`: Limit default global.
+- `BASE_RATE` & `THROTTLE_RATE`: Nama Profil MikroTik.
 
 ---
 
-## 10) Docker runtime plan
-- Single container `mikrotik-bot` (restart always)
-- Volume persist:
-  - `./data:/app/data`
-  - `./.env:/app/.env:ro`
-- Healthcheck endpoint/log-based
+## 9) Roadmap Implementasi
+1. **Phase 1-3**: Dasar koneksi, collector usage, dan engine FUP (Basics).
+2. **Phase 4-5**: Automated monthly reset & advanced commands (Reporting).
+3. **Phase 6**: Interactive UI (Inline Buttons & Session Management).
+4. **Phase 7**: **Clean Architecture Refactor** (Modularization & Stability). - **[CURRENT]**
 
 ---
 
-## 11) Failure handling
-- MikroTik unreachable -> retry exponential backoff + notif warning
-- Telegram API error -> log + retry
-- DB lock -> retry ringan
-- Eksekusi action gagal -> jangan ubah state, kirim alert
-
----
-
-## 12) Security baseline
-- Simpan kredensial di `.env` (permission `600`)
-- Jangan hardcode password di source
-- Batasi akses Telegram command ke chat id admin
-- Backup `data/bot.db` harian
-
----
-
-## 13) Tahapan implementasi (pelan-pelan)
-1. **Phase 1:** scaffold Docker + koneksi MikroTik + `/health`
-2. **Phase 2:** collector usage + simpan DB
-3. **Phase 3:** engine FUP auto throttle + disconnect + notif
-4. **Phase 4:** monthly reset otomatis
-5. **Phase 5:** command admin tambahan + report ringkas
-
----
-
-## 14) Catatan untuk topologi kamu
-- Home-server (192.168.1.48) bisa akses MikroTik via `192.168.1.119:2222` (sudah terbukti)
-- Eksekusi WOL dan automasi jaringan tetap dari home-server memungkinkan
-- Untuk FUP ini, gunakan endpoint MikroTik yang konsisten dari home-server
+## 10) Security Policy
+- Tidak ada kredensial di dalam kode (Strict `.env`).
+- Database (`bot.db`) tidak di-track oleh Git.
+- Akses Telegram dibatasi hanya untuk Admin Chat ID yang terdaftar.
