@@ -1,19 +1,34 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from fastapi import HTTPException, Security, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from src.config import Config
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password.encode('utf-8'), hashed_password)
+    if not hashed_password:
+        return False
+    # Ensure bytes
+    pwd_bytes = plain_password.encode('utf-8')
+    if isinstance(hashed_password, str):
+        hashed_bytes = hashed_password.encode('utf-8')
+    else:
+        hashed_bytes = hashed_password
+    
+    try:
+        return bcrypt.checkpw(pwd_bytes, hashed_bytes)
+    except:
+        return False
 
 def get_password_hash(password):
-    return pwd_context.hash(password.encode('utf-8'))
+    # Ensure bytes
+    pwd_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    # returns bytes, we'll decode to string for DB storage
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
