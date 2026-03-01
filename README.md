@@ -1,4 +1,4 @@
-# 🛰️ MikroTik FUP Manager Pro
+# 🛰️ MikroTik FUP Manager
 
 Sistem manajemen FUP (Fair Usage Policy) otomatis untuk jaringan ISP/RT-RW Net berbasis **MikroTik PPPoE**. Bot ini membantu memantau penggunaan kuota user secara real-time dan melakukan pembatasan kecepatan otomatis menggunakan sistem Profile MikroTik.
 
@@ -18,14 +18,14 @@ Sistem manajemen FUP (Fair Usage Policy) otomatis untuk jaringan ISP/RT-RW Net b
 ## 🛠️ Persiapan MikroTik
 1. Pastikan fitur **API** aktif di MikroTik (`/ip service enable api`).
 2. Siapkan dua profil PPPoE:
-   - **Normal Profile** (Contoh: `Ilham` - 5M/5M)
+   - **Normal Profile** (Contoh: `NORMAL` - 5M/5M)
    - **Throttled Profile** (Contoh: `LIMIT` - 2M/2M)
 
 ## 🚀 Cara Instalasi
 
 1. **Clone Repository**
    ```bash
-   git clone https://github.com/username/mikrotik-bot.git
+   git clone https://github.com/ruligandari/mikrotik-bot.git
    cd mikrotik-bot
    ```
 
