@@ -95,6 +95,15 @@ class SqliteRepository:
         
         conn.commit()
         
+        # System Settings
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
+        conn.commit()
+        
         # Migrations
         self._migrate(cur, conn)
         conn.close()
@@ -200,6 +209,30 @@ class SqliteRepository:
         row = cur.fetchone()
         conn.close()
         return row[0] if row and row[0] else 'NORMAL'
+
+    def set_user_whatsapp(self, username: str, number: Optional[str]):
+        conn = self.get_conn()
+        cur = conn.cursor()
+        cur.execute('UPDATE users SET whatsapp=? WHERE username=?', (number, username))
+        conn.commit()
+        conn.close()
+
+    # --- Settings Handlers ---
+    def get_setting(self, key: str, default: str = None) -> Optional[str]:
+        conn = self.get_conn()
+        cur = conn.cursor()
+        cur.execute('SELECT value FROM settings WHERE key=?', (key,))
+        row = cur.fetchone()
+        conn.close()
+        return row[0] if row else default
+
+    def set_setting(self, key: str, value: str):
+        conn = self.get_conn()
+        cur = conn.cursor()
+        cur.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, value))
+        conn.commit()
+        conn.close()
+        return value
 
     def get_user_whatsapp(self, username: str) -> Optional[str]:
         conn = self.get_conn()

@@ -8,7 +8,7 @@ from src.config import Config
 from src.application.fup_service import FupService
 from src.application.admin_service import AdminService
 from src.application.billing_service import BillingService
-from src.interface.api.security import create_access_token, get_current_user
+from src.interface.api.security import create_access_token, get_current_user, verify_password, get_password_hash
 
 class Token(BaseModel):
     access_token: str
@@ -36,14 +36,29 @@ class ToggleRequest(BaseModel):
     username: str
     enabled: bool
 
+class AdminUpdateRequest(BaseModel):
+    new_username: Optional[str] = None
+    new_password: Optional[str] = None
+
 def create_router(fup_service: FupService, admin_service: AdminService, billing_service: BillingService):
     router = APIRouter(prefix="/api/v1")
 
     # --- Public Auth ---
     @router.post("/auth/login", response_model=Token)
     async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-        # Simple admin password check
-        if form_data.username != "admin" or form_data.password != Config.ADMIN_PASSWORD:
+        # 1. Get credentials from DB
+        db_user = admin_service.repo.get_setting("admin_username", "admin")
+        db_pwd_hash = admin_service.repo.get_setting("admin_password_hash")
+        
+        # 2. Verify
+        if db_pwd_hash:
+            # Login via DB (already hashed)
+            is_valid = (form_data.username == db_user and verify_password(form_data.password, db_pwd_hash))
+        else:
+            # Fallback to .env (admin_password_hash not set yet)
+            is_valid = (form_data.username == "admin" and form_data.password == Config.ADMIN_PASSWORD)
+
+        if not is_valid:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect username or password",
@@ -55,6 +70,15 @@ def create_router(fup_service: FupService, admin_service: AdminService, billing_
             data={"sub": form_data.username}, expires_delta=access_token_expires
         )
         return {"access_token": access_token, "token_type": "bearer"}
+
+    @router.post("/auth/update-admin", dependencies=[Depends(get_current_user)])
+    async def update_admin(req: AdminUpdateRequest):
+        if req.new_username:
+            admin_service.repo.set_setting("admin_username", req.new_username)
+        if req.new_password:
+            hashed = get_password_hash(req.new_password)
+            admin_service.repo.set_setting("admin_password_hash", hashed)
+        return {"message": "Admin credentials updated. Silakan login kembali dengan data baru."}
 
     # --- Protected Routes ---
     

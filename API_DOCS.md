@@ -13,10 +13,16 @@ API ini dilindungi dengan **JWT Authentication**. Semua endpoint (kecuali Login)
     *   `username`: (Default: `admin`)
     *   `password`: (Sesuai `ADMIN_PASSWORD` di `.env`)
 *   **Success Response (200 OK):**
+    ```
+
+### 1.1 Update Admin Credentials
+Mengubah username atau password login dashboard. (Membutuhkan Login Admin).
+*   **Endpoint:** `POST /api/v1/auth/update-admin`
+*   **Body (JSON):**
     ```json
     {
-      "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "token_type": "bearer"
+      "new_username": "admin_baru",
+      "new_password": "password_super_aman"
     }
     ```
 
